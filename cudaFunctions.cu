@@ -2,37 +2,125 @@
 #include <helper_cuda.h>
 #include "myProto.h"
 
-__global__ void calculateHistogram(int* data, int* histogram, int* size) {
-    int tid = blockIdx.x * blockDim.x + threadIdx.x;
-    if (tid < *size) {
-        atomicAdd(&histogram[data[tid]], 1);
+  __global__  void buildHist(int *h, int *temp) {
+    int index = threadIdx.x;
+
+    for (int i = 0; i < NUM_BLOCKS; i++) {
+      h[temp[index]] += temp[index + i * RANGE];
     }
-}
+  }
 
-int computeOnGPU(int *data, int* split_size, int* histogram) {
+    __global__  void buildTemp(int *A, int *temp, int numElements) {
+    int index = blockIdx.x * blockDim.x + threadIdx.x;
+    int offset_A = (numElements / (NUM_BLOCKS * NUM_THREADS)) * index;
+    int offset_temp = RANGE * index;
 
-    int* dev_data;
-    int* dev_histogram;
+    for (int i = 0; i < numElements / (NUM_BLOCKS * NUM_THREADS); i++) {
+      temp[offset_temp + A[offset_A + i]]++;
+    }
+  }
 
-        // Allocate memory on GPU
-    cudaMalloc((void**)&dev_data, (*split_size) * sizeof(int));
-    cudaMalloc((void**)&dev_histogram, NUM_BINS * sizeof(int));
+  __global__  void initHist(int * h) {
+    int index = threadIdx.x;
+    h[index] = 0;
+  }
 
-    // Copy data from host to device
-    cudaMemcpy(dev_data, data, (*split_size) * sizeof(int), cudaMemcpyHostToDevice);
-    cudaMemset(dev_histogram, 0, NUM_BINS * sizeof(int));
+    __global__  void initTemp(int * temp) {
+    int index = blockIdx.x * blockDim.x + threadIdx.x;
+    int offset_temp = RANGE * index;
 
-    // Launch CUDA kernels
-    int num_blocks = (*split_size + BLOCK_SIZE - 1) / BLOCK_SIZE;
-    calculateHistogram<<<num_blocks, BLOCK_SIZE>>>(dev_data, dev_histogram, split_size);
+    for (int i = 0; i< RANGE; i++)
+      temp[offset_temp + i] = 0;
+  }
+
+int computeOnGPU(int *data, int numElements, int* hist) {
+
+    // Error code to check return values for CUDA calls
+    cudaError_t err = cudaSuccess;
+
+    // Allocate data on device
+    int* d_A = NULL;
+    err = cudaMalloc((void **)&d_A, numElements * sizeof(int));
+    if (err != cudaSuccess) {
+        fprintf(stderr, "Error in line %d cuda (error code %s)!\n", __LINE__, cudaGetErrorString(err));
+        exit(EXIT_FAILURE);
+    }
+
+    // Allocate hist on device
+    int* d_H = NULL;
+    err = cudaMalloc((void **)&d_H, RANGE * sizeof(int));
+    if (err != cudaSuccess) {
+        fprintf(stderr, "Error in line %d cuda (error code %s)!\n", __LINE__, cudaGetErrorString(err));
+        exit(EXIT_FAILURE);
+    }
+
+    // Allocate temp on device
+    int* d_temp = NULL;
+    err = cudaMalloc((void **)&d_temp, numElements * sizeof(int));
+    if (err != cudaSuccess) {
+        fprintf(stderr, "Error in line %d cuda (error code %s)!\n", __LINE__, cudaGetErrorString(err));
+        exit(EXIT_FAILURE);
+    }
+
+    //Copy data to the device
+    err = cudaMemcpy(d_A, data, numElements * sizeof(int), cudaMemcpyHostToDevice);
+    if (err != cudaSuccess) {
+      fprintf(stderr, "Error in line %d cuda (error code %s)!\n", __LINE__, cudaGetErrorString(err));
+      exit(EXIT_FAILURE);
+    }
+
+    // Initialize hist on device
+    initHist<<<1, RANGE>>>(d_H); // 1 block with 256 threads
+    err = cudaGetLastError();
+    if (err != cudaSuccess) {
+        fprintf(stderr, "Error in line %d cuda (error code %s)!\n", __LINE__, cudaGetErrorString(err));
+        exit(EXIT_FAILURE);
+    }
+
+    initTemp<<<NUM_BLOCKS, NUM_THREADS>>>(d_temp);
+    err = cudaGetLastError();
+    if (err != cudaSuccess) {
+        fprintf(stderr, "Error in line %d cuda (error code %s)!\n", __LINE__, cudaGetErrorString(err));
+        exit(EXIT_FAILURE);
+    }
+
+    // Unify the results
+    buildTemp<<< NUM_BLOCKS, NUM_THREADS >>>(d_A, d_temp, numElements);
+    err = cudaGetLastError();
+    if (err != cudaSuccess) {
+      fprintf(stderr, "Error in line %d cuda (error code %s)!\n", __LINE__, cudaGetErrorString(err));
+      exit(EXIT_FAILURE);
+    }
+
+    // Unify the results
+    buildHist<<< 1, NUM_THREADS >>>(d_H, d_temp);
+    err = cudaGetLastError();
+    if (err != cudaSuccess) {
+      fprintf(stderr, "Error in line %d cuda (error code %s)!\n", __LINE__, cudaGetErrorString(err));
+      exit(EXIT_FAILURE);
+    }
+
+    // Copy the final histogram to the host
+    err = cudaMemcpy(hist, d_H, RANGE * sizeof(int), cudaMemcpyDeviceToHost);
+    if (err != cudaSuccess) {
+      fprintf(stderr, "Error in line %d cuda (error code %s)!\n", __LINE__, cudaGetErrorString(err));
+      exit(EXIT_FAILURE);
+    }
     
-    // Copy histogram from device to host
-    cudaMemcpy(histogram, dev_histogram, NUM_BINS * sizeof(int), cudaMemcpyDeviceToHost);
-
     // Free device global memory
-    cudaFree(dev_data);
-    cudaFree(dev_histogram);
+    err = cudaFree(d_A);
+    if (err != cudaSuccess) {
+      fprintf(stderr, "Error in line %d cuda (error code %s)!\n", __LINE__, cudaGetErrorString(err));
+      exit(EXIT_FAILURE);
+    }
 
-    printf("Done\n");
+        // Free device global memory
+    err = cudaFree(d_H);
+    if (err != cudaSuccess) {
+      fprintf(stderr, "Error in line %d cuda (error code %s)!\n", __LINE__, cudaGetErrorString(err));
+      exit(EXIT_FAILURE);
+    }
+
     return 0;
 }
+
