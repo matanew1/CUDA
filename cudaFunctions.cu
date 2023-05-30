@@ -6,7 +6,9 @@ __global__ void computeHistogram(int* array, int* hist, int* size) {
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     
     for (int i = 0; i < NUM_THREADS; i++)
-      h[tid] += temp[tid + i*RANGE];
+    {
+      hist[array[tid]]++;
+    }
 }
 
 int computeOnGPU(int *local_array, int* split_size, int* hist) {
