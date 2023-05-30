@@ -36,9 +36,6 @@
 
 int computeOnGPU(int *data, int numElements, int* hist) {
 
-    dim3 gridSize(10); // 10 blocks in the grid
-    dim3 blockSize(20);  // 20 threads per block
-
     // Error code to check return values for CUDA calls
     cudaError_t err = cudaSuccess;
     size_t size = numElements * sizeof(int);
@@ -50,6 +47,14 @@ int computeOnGPU(int *data, int numElements, int* hist) {
         fprintf(stderr, "Error in line %d (error code %s)!\n", __LINE__, cudaGetErrorString(err));
         exit(EXIT_FAILURE);
     }
+
+    int* device_temp = NULL;
+    err = cudaMalloc((void **)&device_temp, NUM_BLOCKS * NUM_THREADS * RANGE * sizeof(int));
+    if (err != cudaSuccess) {
+        fprintf(stderr, "Error in line %d (error code %s)!\n", __LINE__, cudaGetErrorString(err));
+        exit(EXIT_FAILURE);
+    }
+    
     // Allocate hist on device
     int* device_hist = NULL;
     err = cudaMalloc((void **)&device_hist, RANGE * sizeof(int));
@@ -73,7 +78,7 @@ int computeOnGPU(int *data, int numElements, int* hist) {
     }
 
     // Initialize hist on device
-    initHist<<<gridSize, blockSize>>>(device_hist);
+    initHist<<<1, RANGE>>>(device_hist); // 1 block with 256 threads
     err = cudaGetLastError();
     if (err != cudaSuccess) {
         fprintf(stderr, "Error in line %d (error code %s)!\n", __LINE__, cudaGetErrorString(err));
@@ -81,7 +86,7 @@ int computeOnGPU(int *data, int numElements, int* hist) {
     }
 
     // Initialize data on device
-    initTemp <<< gridSize, blockSize >>> (device_data);
+    initTemp <<<1, RANGE >>> (device_data);
     err = cudaGetLastError();
     if (err != cudaSuccess) {
       fprintf(stderr, "Error in line %d (error code %s)!\n", __LINE__, cudaGetErrorString(err));
@@ -89,7 +94,7 @@ int computeOnGPU(int *data, int numElements, int* hist) {
     }
 
     // Unify the results
-    buildHist<<< gridSize, blockSize >>>(device_hist, device_data);
+    buildHist<<< NUM_BLOCKS, NUM_THREADS >>>(device_hist, device_data);
     err = cudaGetLastError();
     if (err != cudaSuccess) {
       fprintf(stderr, "Error in line %d (error code %s)!\n", __LINE__, cudaGetErrorString(err));

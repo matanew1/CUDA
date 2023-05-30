@@ -60,7 +60,8 @@ int main(int argc, char *argv[])
    }
 
    // On each process - perform a second half of its task with CUDA
-   int hist[RANGE] = {0};
+   int* hist = (int *)calloc((RANGE), sizeof(int));
+   
    if (computeOnGPU(data, SIZE / 2, hist) != 0)
       MPI_Abort(MPI_COMM_WORLD, __LINE__);
 
