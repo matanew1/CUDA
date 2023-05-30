@@ -6,4 +6,4 @@
 #define NUM_BLOCKS  10
 
 void test(int *data, int n);
-int computeOnGPU(int *data, int numElements, int* hist);
+int computeOnGPU(int *local_array, int* split_size, int* hist) ;
