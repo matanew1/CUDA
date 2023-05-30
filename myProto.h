@@ -1,8 +1,8 @@
 #pragma once
 
-#define SIZE  1000000
-#define RANGE  256
-#define NUM_THREADS  20
+#define ARRAY_SIZE 1000000
+#define NUM_BINS 256
+#define BLOCK_SIZE 20
 #define NUM_BLOCKS  10
 
 void test(int *data, int n);

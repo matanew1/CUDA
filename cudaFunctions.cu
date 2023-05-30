@@ -2,59 +2,36 @@
 #include <helper_cuda.h>
 #include "myProto.h"
 
-__global__ void computeHistogram(int* array, int* hist, int* size) {
-  int tid = blockIdx.x * blockDim.x + threadIdx.x;
-    
-  atomicAdd(&hist[array[tid]], 1);
+__global__ void calculateHistogram(int* data, int* histogram, int* size) {
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    if (tid < *size) {
+        atomicAdd(&histogram[data[tid]], 1);
+    }
 }
 
-int computeOnGPU(int *local_array, int* split_size, int* hist) {
+int computeOnGPU(int *data, int* split_size, int* histogram) {
 
-    // Error code to check return values for CUDA calls
-    cudaError_t err = cudaSuccess;
+    int* dev_data;
+    int* dev_histogram;
 
-    // Allocate data on device
-    int* d_array = NULL;
-    int* d_hist = NULL;
+        // Allocate memory on GPU
+    cudaMalloc((void**)&dev_data, (*split_size) * sizeof(int));
+    cudaMalloc((void**)&dev_histogram, NUM_BINS * sizeof(int));
 
-    err = cudaMalloc((void**)&d_array, (*split_size) * sizeof(int));
-    if (err != cudaSuccess) {
-        fprintf(stderr, "Error in line %d (error code %s)!\n", __LINE__, cudaGetErrorString(err));
-        exit(EXIT_FAILURE);
-    }
-    err = cudaMalloc((void**)&d_hist, RANGE * sizeof(int));
-    if (err != cudaSuccess) {
-        fprintf(stderr, "Error in line %d (error code %s)!\n", __LINE__, cudaGetErrorString(err));
-        exit(EXIT_FAILURE);
-    }
+    // Copy data from host to device
+    cudaMemcpy(dev_data, data, (*split_size) * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemset(dev_histogram, 0, NUM_BINS * sizeof(int));
 
-    //Copy data to the device
-    err = cudaMemcpy(d_array, local_array, (*split_size) * sizeof(int), cudaMemcpyHostToDevice);
-    if (err != cudaSuccess) {
-      fprintf(stderr, "Error in line %d (error code %s)!\n", __LINE__, cudaGetErrorString(err));
-      exit(EXIT_FAILURE);
-    }
-
-    // Initialize hist on device
-    err = cudaMemset(d_hist, 0, RANGE * sizeof(int));
-    if (err != cudaSuccess) {
-      fprintf(stderr, "Error in line %d (error code %s)!\n", __LINE__, cudaGetErrorString(err));
-      exit(EXIT_FAILURE);
-    }
-
-    // Launch kernel
-    computeHistogram<<<10, 20>>>(d_array, d_hist, split_size);
-
-    // Copy histogram data back to host
-    err = cudaMemcpy(hist, d_hist, RANGE * sizeof(int), cudaMemcpyDeviceToHost);
-    if (err != cudaSuccess) {
-      fprintf(stderr, "Error in line %d (error code %s)!\n", __LINE__, cudaGetErrorString(err));
-      exit(EXIT_FAILURE);
-    }
+    // Launch CUDA kernels
+    int num_blocks = (*split_size + BLOCK_SIZE - 1) / BLOCK_SIZE;
+    calculateHistogram<<<num_blocks, BLOCK_SIZE>>>(dev_data, dev_histogram, split_size);
+    
+    // Copy histogram from device to host
+    cudaMemcpy(histogram, dev_histogram, NUM_BINS * sizeof(int), cudaMemcpyDeviceToHost);
 
     // Free device global memory
-    cudaFree(d_array);
-    cudaFree(d_hist);
+    cudaFree(dev_data);
+    cudaFree(dev_histogram);
 
     printf("Done\n");
     return 0;
