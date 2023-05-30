@@ -27,18 +27,11 @@ int main(int argc, char *argv[])
    array = (int *)malloc(SIZE * sizeof(int));
    local_array = (int*)malloc(split_size * sizeof(int));
 
-      
    srand(time(NULL));
 
-   if (rank == 0) 
-   {
-      #pragma omp parallel
-      {
-         #pragma omp parallel for
-         for (int i = 0; i < SIZE; i++) {
-            array[i] = rand() % RANGE;
-         }
-      }
+   #pragma omp parallel for
+   for (int i = 0; i < SIZE; i++) {
+      array[i] = rand() % RANGE;
    }
 
    MPI_Scatter(array, split_size, MPI_INT, local_array, split_size, MPI_INT, 0, MPI_COMM_WORLD);
@@ -46,21 +39,24 @@ int main(int argc, char *argv[])
    if (computeOnGPU(local_array, &split_size, hist) != 0)
       MPI_Abort(MPI_COMM_WORLD, __LINE__);
 
-   // int* gathered_hist = NULL;
-   // if (rank == 0) {
-   //    gathered_hist = (int*)malloc(split_size * sizeof(int));
-   // }
+   int* gathered_hist = NULL;
+   if (rank == 0) {
+      gathered_hist = (int*)calloc(RANGE, sizeof(int));
+   }
     
-   // MPI_Gather(hist, split_size, MPI_INT, gathered_hist, split_size, MPI_INT, 0, MPI_COMM_WORLD);
+   MPI_Reduce(hist, gathered_hist, RANGE, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
 
-   // if (rank == 0) {
-   //    // Print the histogram
-   //    for (int i = 0; i < split_size; i++) {
-   //       printf("hist[%d]: %d\n", i, gathered_hist[i]);
-   //    }       
-   //    free(gathered_hist);
-   // }
-   // free(local_array);
+   if (rank == 0) {
+      // Print the histogram
+      for (int i = 0; i < RANGE; i++) {
+         printf("hist[%d]: %d\n", i, gathered_hist[i]);
+      }       
+      free(gathered_hist);
+   }
+   
+   free(local_array);
+   free(array);
+   free(hist);
     
    MPI_Finalize();
 
