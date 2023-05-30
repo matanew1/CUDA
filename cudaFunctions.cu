@@ -3,12 +3,9 @@
 #include "myProto.h"
 
 __global__ void computeHistogram(int* array, int* hist, int* size) {
-    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  int tid = blockIdx.x * blockDim.x + threadIdx.x;
     
-    for (int i = 0; i < NUM_THREADS; i++)
-    {
-      hist[array[tid]]++;
-    }
+  atomicAdd(&hist[array[tid]], 1);
 }
 
 int computeOnGPU(int *local_array, int* split_size, int* hist) {
