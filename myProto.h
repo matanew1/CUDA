@@ -1,6 +1,6 @@
 #pragma once
 
-#define SIZE  1000000
+#define SIZE  100
 #define RANGE  256
 #define NUM_THREADS  20
 #define NUM_BLOCKS  10
