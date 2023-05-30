@@ -5,49 +5,62 @@
 #include <stdlib.h>
 #include "myProto.h"
 
-int main(int argc, char* argv[]) {
-    int num_procs, rank;
-    int* data;
-    int histogram[NUM_BINS] = {0};
-    int* dev_data;
-    int* dev_histogram;
-    int i, j;
-    int split_size = ARRAY_SIZE / 2;
-
-    MPI_Init(&argc, &argv);
-    MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-
-    // Generate random data on root process
-    if (rank == 0) {
-        data = (int*)malloc(ARRAY_SIZE * sizeof(int));
-        for (i = 0; i < ARRAY_SIZE; i++) {
-            data[i] = rand() % NUM_BINS;
-        }
-    }
-    /*
-    mpiexec -np 2 ./mpiCudaOpemMP
-Invalid MIT-MAGIC-COOKIE-1 keyInvalid MIT-MAGIC-COOKIE-1 keyAbort(1073365505) on node 0 (rank 0 in comm 0): Fatal error in internal_Scatter: Invalid buffer pointer, error stack:
-internal_Scatter(141): MPI_Scatter(sendbuf=0x7ff8729a3010, sendcount=500000, MPI_INT, recvbuf=0x7ff8729a3010, recvcount=500000, MPI_INT, 0, MPI_COMM_WORLD) failed
-internal_Scatter(109): Buffers must not be aliased
-make: *** [Makefile:12: run] Error 1*/
-
-    // Scatter data to all processes
-    MPI_Scatter(data, split_size, MPI_INT, data, split_size, MPI_INT, 0, MPI_COMM_WORLD);
-   
-   if (computeOnGPU(data, &split_size, histogram) != 0)
+int main(int argc, char *argv[])
+{
+   MPI_Status status;
+   int* array = NULL, *hist = NULL, *local_array = NULL;
+   int *d_array = NULL, *d_hist = NULL;
+    
+   int rank, size;
+   MPI_Init(&argc, &argv);
+   MPI_Comm_size(MPI_COMM_WORLD, &size);
+   if (size != 2)
+   {
+      printf("Run the example with two processes only\n");
       MPI_Abort(MPI_COMM_WORLD, __LINE__);
+   }
+   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-       // Reduce histograms from all processes
-   MPI_Reduce(histogram, dev_histogram, NUM_BINS, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
+   int split_size = SIZE / size;
 
-   // Print the histogram on the root process
-   if (rank == 0) {
-      for (i = 0; i < NUM_BINS; i++) {
-         printf("Bin %d: %d\n", i, histogram[i]);
+   hist = (int* )calloc(RANGE, sizeof(int));
+   array = (int *)malloc(SIZE * sizeof(int));
+   local_array = (int*)malloc(split_size * sizeof(int));
+
+      
+   srand(time(NULL));
+
+   if (rank == 0) 
+   {
+      #pragma omp parallel
+      {
+         #pragma omp parallel for
+         for (int i = 0; i < SIZE; i++) {
+            array[i] = rand() % RANGE;
+         }
       }
    }
-   free(data);
+
+   MPI_Scatter(array, split_size, MPI_INT, local_array, split_size, MPI_INT, 0, MPI_COMM_WORLD);
+   
+   if (computeOnGPU(local_array, &split_size, hist) != 0)
+      MPI_Abort(MPI_COMM_WORLD, __LINE__);
+
+   // int* gathered_hist = NULL;
+   // if (rank == 0) {
+   //    gathered_hist = (int*)malloc(split_size * sizeof(int));
+   // }
+    
+   // MPI_Gather(hist, split_size, MPI_INT, gathered_hist, split_size, MPI_INT, 0, MPI_COMM_WORLD);
+
+   // if (rank == 0) {
+   //    // Print the histogram
+   //    for (int i = 0; i < split_size; i++) {
+   //       printf("hist[%d]: %d\n", i, gathered_hist[i]);
+   //    }       
+   //    free(gathered_hist);
+   // }
+   // free(local_array);
     
    MPI_Finalize();
 
