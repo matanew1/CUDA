@@ -21,19 +21,16 @@ __global__  void initArr(int * h) {
 
 __global__ void histogram_kernel(int *input, int *histogram, int split_size)
 {
-  // gridDim.x = 10
-  // blockDim.x = 20
-
+  // gridDim.x = 10 (num of blocks in grid)
+  // blockDim.x = 20 (numof thread in block)
     int tid = blockIdx.x * blockDim.x + threadIdx.x; // range 0 - 199
-    int stride = blockDim.x * gridDim.x; // 200
+    int offset = blockDim.x * gridDim.x; // 200
 
-    /*        tid = 0
-      0 -> 200 -> 400 ->...->499800
-    */
+    // each thread jump by offset
     while (tid < split_size) 
     {
-      atomicAdd(&(histogram[input[tid]]),1);
-      tid += stride;
+      atomicAdd(&(histogram[input[tid]]),1); // avoid race condition
+      tid += offset;
     }
 }
 
@@ -100,7 +97,6 @@ int computeOnGPU(int *local_array, int *split_size, int *hist)
         fprintf(stderr, "Error in line %d (error code %s)!\n", __LINE__, cudaGetErrorString(err));
         exit(EXIT_FAILURE);
     }
-
     err = cudaFree(d_hist);
     if (err != cudaSuccess)
     {
