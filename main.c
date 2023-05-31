@@ -31,11 +31,11 @@ int main(int argc, char *argv[])
 
     if (rank == 0)
     {
+        
 #pragma omp parallel for
         for (int i = 0; i < SIZE; i++)
         {
             array[i] = rand() % RANGE;
-            printf("\n%d %d",i,array[i]);
         } 
     }
 

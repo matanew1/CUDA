@@ -32,7 +32,7 @@ __global__ void histogram_kernel(int *input, int *histogram, int split_size)
     */
     while (tid < split_size) 
     {
-      histogram[input[tid]]++;
+      atomicAdd(&(histogram[input[tid]]),1);
       tid += stride;
     }
 }
