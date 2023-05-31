@@ -17,8 +17,6 @@ __global__  void initArr(int * h) {
   h[index] = 0;
 
 }
-
-
 __global__ void histogram_kernel(int *input, int *histogram, int split_size)
 {
   // gridDim.x = 10 (num of blocks in grid)
