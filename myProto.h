@@ -5,5 +5,5 @@
 #define NUM_THREADS  20
 #define NUM_BLOCKS  10
 
-void test(int *data, int n);
+void test(int *data, int* sum);
 int computeOnGPU(int *local_array, int* split_size, int* hist) ;

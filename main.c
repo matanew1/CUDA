@@ -59,12 +59,8 @@ int main(int argc, char *argv[])
     if (rank == 0)
     {
         int sum = 0;
-        for (int i = 0; i < RANGE; i++)
-        {
-            printf("\nglobal_hist[%d] = %d", i, global_hist[i]);
-            sum += global_hist[i];
-        }
-        printf("\n\nglobal_sum = %d\n", sum);
+        test(global_hist, &sum);
+
         // Free the memory allocated for the global histogram
         free(global_hist);
     }

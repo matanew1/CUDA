@@ -11,7 +11,8 @@
   stride - is the total number of threads in the grid.
 */
 
-__global__  void initArr(int * h) {
+__global__  void initArr(int * h) 
+{
 
   int index = threadIdx.x;
   h[index] = 0;
